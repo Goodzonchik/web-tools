@@ -5,155 +5,155 @@ javascript: (function () {
   const blockStyle = `position: fixed; width: 500px; height: 300px; z-index: 100; background: rgb(221 221 221 / 63%); top: -1px; left: -1px; border: 1px solid black;`;
 
   /* logic */
-  const isToolsOpen = document.getElementById(containerId);
-
-  if (isToolsOpen) {
-    isToolsOpen.remove();
-
+  const existingContainer = document.getElementById(containerId);
+  if (existingContainer) {
+    existingContainer.remove();
     return;
   }
 
   createContainer();
+
+  /* functions */
+  function createContainer() {
+    const container = document.createElement('div');
+    container.style.cssText = blockStyle;
+    container.id = containerId;
+    container.innerHTML = `
+      <div id="form"></div>
+      <div>
+        <button id="add-pair">+ Добавить пару</button>
+        <button id="save">Сохранить</button>
+        <button id="fill">Заполнить</button>
+      </div>
+    `;
+    document.body.appendChild(container);
+  }
 
   const formContainer = document.getElementById('form');
   const addButton = document.getElementById('add-pair');
   const saveButton = document.getElementById('save');
   const fillButton = document.getElementById('fill');
 
-    /*  Обработчики событий */
+  /* Event handlers */
   addButton.addEventListener('click', () => addPair());
   saveButton.addEventListener('click', saveData);
   fillButton.addEventListener('click', fillByXPath);
 
   initForm();
 
-  /* functions */
-
-  function createContainer() {
-    const container = document.createElement('div');
-
-    container.style.cssText = blockStyle;
-    container.id = containerId;
-
-    container.innerHTML = `<div id="form"></div><div><button id="add-pair">+ Добавить пару</button><button id="save">Сохранить</button><button id="fill">Заполнить</button></div>`;
-
-    document.body.appendChild(container);
-  }
-
-
-
   function initForm() {
     const savedData = localStorage.getItem(currentURL);
+    if (!savedData) return addPair();
 
-    if (savedData) {
-      try {
-        const pairs = JSON.parse(savedData);
-        pairs.forEach((pair) => addPair(pair.key, pair.value));
-      } catch {
-        addPair();
-      }
-    } else {
+    try {
+      JSON.parse(savedData).forEach(pair => addPair(pair.key, pair.value));
+    } catch {
       addPair();
     }
   }
 
-  /*  Добавление новой пары полей */
   function addPair(key = '', value = '') {
     const pairDiv = document.createElement('div');
     pairDiv.className = 'pair-container';
+    
+    /* Исправлено: безопасное создание элементов вместо innerHTML */
+    const keyInput = document.createElement('input');
+    keyInput.type = 'text';
+    keyInput.className = 'key-input';
+    keyInput.placeholder = 'Ключ';
+    keyInput.value = key;
 
-    pairDiv.innerHTML = `
-                    <input type="text" class="key-input" placeholder="Ключ" value="${key}">
-                    <input type="text" class="value-input" placeholder="Значение" value="${value}">
-                    <button class="remove">×</button>
-                `;
+    const valueInput = document.createElement('input');
+    valueInput.type = 'text';
+    valueInput.className = 'value-input';
+    valueInput.placeholder = 'Значение';
+    valueInput.value = value;
 
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove';
+    removeBtn.textContent = '×';
+
+    pairDiv.append(keyInput, valueInput, removeBtn);
     formContainer.appendChild(pairDiv);
   }
 
-  /*  Сохранение данных */
   function saveData() {
     const pairs = [];
-    const containers = formContainer.querySelectorAll('.pair-container');
-
-    containers.forEach((container) => {
+    document.querySelectorAll('.pair-container').forEach(container => {
       const key = container.querySelector('.key-input').value.trim();
       const value = container.querySelector('.value-input').value.trim();
-
-      if (key || value) {
-        pairs.push({ key, value });
-      }
+      if (key || value) pairs.push({ key, value });
     });
 
     localStorage.setItem(currentURL, JSON.stringify(pairs));
-    alert('Данные сохранены для текущего URL!');
+    showStatus('Данные сохранены для текущего URL!', 'success');
   }
 
-  /*  Удаление пары */
-  formContainer.addEventListener('click', (e) => {
-    if (e.target.classList.contains('remove')) {
-      if (formContainer.querySelectorAll('.pair-container').length > 1) {
-        e.target.closest('.pair-container').remove();
-      } else {
-        alert('Должна остаться хотя бы одна пара!');
-      }
+  formContainer.addEventListener('click', e => {
+    if (!e.target.classList.contains('remove')) return;
+    if (formContainer.querySelectorAll('.pair-container').length <= 1) {
+      return showStatus('Должна остаться хотя бы одна пара!', 'error');
     }
+    e.target.closest('.pair-container').remove();
   });
 
   function fillByXPath() {
-    const containers = formContainer.querySelectorAll('.pair-container');
-    let filledCount = 0;
-    let errorCount = 0;
-
-    containers.forEach((container) => {
+    let filled = 0, errors = 0;
+    
+    document.querySelectorAll('.pair-container').forEach(container => {
       const xpath = container.querySelector('.key-input').value.trim();
       const value = container.querySelector('.value-input').value.trim();
-
       if (!xpath) return;
 
       try {
-        const result = document.evaluate(
-          xpath,
+        /* Исправлено: безопасная обработка кавычек в XPath */
+        const xpathSafe = xpath.replace(/"/g, "'");
+        const node = document.evaluate(
+          xpathSafe,
           document,
           null,
           XPathResult.FIRST_ORDERED_NODE_TYPE,
           null
-        );
+        ).singleNodeValue;
 
-        const node = result.singleNodeValue;
-
-        if (node) {
-          if (node.value !== undefined) {
-            node.value = value;
-            filledCount++;
-          } else if (node.textContent !== undefined) {
-            node.textContent = value;
-            filledCount++;
-          } else {
-            errorCount++;
-            console.error(
-              `Элемент найден, но не поддерживает значения: ${xpath}`
-            );
-          }
-        } else {
-          errorCount++;
-          console.error(`Элемент не найден: ${xpath}`);
+        if (!node) {
+          errors++;
+          return console.error(`Элемент не найден: ${xpath}`);
         }
+
+        if ('value' in node) node.value = value;
+        else node.textContent = value;
+        filled++;
       } catch (e) {
-        errorCount++;
+        errors++;
         console.error(`Ошибка в XPath: ${xpath}`, e);
       }
     });
 
-    if (filledCount > 0 && errorCount === 0) {
-      showStatus(`Успешно заполнено ${filledCount} полей!`, 'success');
-    } else if (filledCount > 0) {
-      showStatus(
-        `Заполнено ${filledCount} полей, ${errorCount} ошибок`,
-        'error'
-      );
+    if (filled > 0 && errors === 0) {
+      showStatus(`Успешно заполнено ${filled} полей!`, 'success');
+    } else if (filled > 0) {
+      showStatus(`Заполнено ${filled} полей, ${errors} ошибок`, 'warning');
     } else {
       showStatus('Не удалось заполнить ни одного поля', 'error');
     }
+  }
+
+  function showStatus(message, type) {
+    const statusEl = document.createElement('div');
+    statusEl.textContent = message;
+    statusEl.style.cssText = `
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 10px;
+      background: ${type === 'success' ? '#4CAF50' : type === 'warning' ? '#FF9800' : '#F44336'};
+      color: white;
+      z-index: 1000;
+      border-radius: 4px;
+    `;
+    
+    document.body.appendChild(statusEl);
+    setTimeout(() => statusEl.remove(), 3000);
   }
 })();
