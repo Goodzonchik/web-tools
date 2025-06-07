@@ -1,5 +1,3 @@
-# web-tools
+# chrome-boolmark-tools
 
-Idea - use web tools like rem to px converter in js.
-Color-picker and etc
-
+Add script like url on new bookmark and use it on site.
