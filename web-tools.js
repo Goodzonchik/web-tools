@@ -12,6 +12,7 @@ javascript: (function () {
   }
 
   createContainer();
+  addStateFieldValuesGen()
 
   /* functions */
   function createContainer() {
